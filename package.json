@@ -1,0 +1,63 @@
+{
+  "name": "prisma-query-ids",
+  "version": "1.0.0",
+  "description": "Prepend SQL queries with source file location comments for Prisma ORM",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run",
+    "test:watch": "node --experimental-vm-modules node_modules/vitest/vitest.mjs",
+    "test:integration": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run tests/integration.test.ts",
+    "test:setup": "prisma db push --schema tests/prisma/schema.prisma --skip-generate",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "prisma",
+    "postgresql",
+    "sql",
+    "debugging",
+    "tracing",
+    "source-maps"
+  ],
+  "engines": {
+    "node": ">=22.9.0"
+  },
+  "peerDependencies": {
+    "@prisma/adapter-pg": ">=5.0.0",
+    "pg": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@prisma/adapter-pg": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@prisma/adapter-pg": "^6.2.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.13.0",
+    "prisma": "^6.2.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  }
+}
