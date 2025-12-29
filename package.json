@@ -26,8 +26,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run",
     "test:watch": "node --experimental-vm-modules node_modules/vitest/vitest.mjs",
-    "test:integration": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run tests/integration.test.ts",
-    "test:setup": "prisma db push --schema tests/prisma/schema.prisma --skip-generate",
+    "test:integration": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run -c vitest.integration.config.ts",
+    "test:integration:setup": "bash scripts/integration-test-setup.sh",
+    "test:setup": "prisma db push --schema tests/prisma/schema.prisma",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -55,9 +56,12 @@
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
     "pg": "^8.13.0",
-    "prisma": "^6.2.0",
+    "prisma": "^7.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.2.0"
   }
 }
