@@ -6,21 +6,39 @@ import { PrismaClient } from '@prisma/client';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://test:test@localhost:5433/test';
 
-// Helper to check if database is reachable
-async function isDatabaseReachable(): Promise<boolean> {
+// Helper to ensure database is reachable - throws helpful error if not
+async function requireDatabaseReachable(): Promise<void> {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
   try {
     await pool.query('SELECT 1');
-    return true;
-  } catch {
-    return false;
+  } catch (error) {
+    throw new Error(
+      '\n\n' +
+      '❌ Cannot connect to test database at: ' + TEST_DATABASE_URL + '\n' +
+      '\n' +
+      'To run integration tests, you have two options:\n' +
+      '\n' +
+      '  1️⃣  Use the automated setup script (recommended):\n' +
+      '      npm run test:integration:setup\n' +
+      '\n' +
+      '  2️⃣  Manual setup:\n' +
+      '      docker compose up -d postgres-test\n' +
+      '      npx prisma generate --schema tests/prisma/schema.prisma\n' +
+      '      npx prisma db push --schema tests/prisma/schema.prisma --skip-generate\n' +
+      '      npm run test:integration\n' +
+      '\n' +
+      'Original error: ' + (error instanceof Error ? error.message : String(error)) + '\n'
+    );
   } finally {
     await pool.end();
   }
 }
 
-describe.runIf(isDatabaseReachable())('integration tests with PostgreSQL', () => {
+describe('integration tests with PostgreSQL', () => {
   beforeAll(async () => {
+    // Fail loudly if database is not available
+    await requireDatabaseReachable();
+
     // Generate Prisma client if not already generated
     const { spawn } = await import('child_process');
     await new Promise<void>((resolve, reject) => {
@@ -130,7 +148,7 @@ describe.runIf(isDatabaseReachable())('integration tests with PostgreSQL', () =>
       try {
         // Push schema to database
         const { execSync } = await import('child_process');
-        execSync('npx prisma db push --schema tests/prisma/schema.prisma --skip-generate', {
+        execSync('npx prisma db push --schema tests/prisma/schema.prisma', {
           env: { ...process.env, TEST_DATABASE_URL },
           stdio: 'inherit',
         });
