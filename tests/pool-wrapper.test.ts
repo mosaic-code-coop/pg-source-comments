@@ -54,10 +54,16 @@ function createMockPool() {
 
 describe('createTrackedPool', () => {
   let mocks: ReturnType<typeof createMockPool>;
+  let cwdStub: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mocks = createMockPool();
+    cwdStub = vi.spyOn(process, 'cwd').mockReturnValue('/project');
+  });
+
+  afterEach(() => {
+    cwdStub?.mockRestore();
   });
 
   describe('pool.query()', () => {
@@ -175,19 +181,6 @@ describe('createTrackedPool', () => {
 
       const calledWith = mocks.spies.poolQuery.mock.calls[0][0] as string;
       expect(calledWith).toContain('in getUsers');
-    });
-
-    it('calls debug logger when enabled', async () => {
-      const debugFn = vi.fn();
-      const tracked = createTrackedPool(mocks.pool, {
-        enabled: true,
-        debug: true,
-        logger: { debug: debugFn },
-      });
-
-      await tracked.query('SELECT 1');
-
-      expect(debugFn).toHaveBeenCalled();
     });
   });
 

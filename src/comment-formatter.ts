@@ -1,15 +1,5 @@
-import type { SourceLocation, QueryIdConfig } from './types.js';
+import type { SourceLocation, SourceCommentConfig } from './types.js';
 import { defaultPathTransformer } from './stack-trace.js';
-
-/**
- * Sanitizes values that might appear in comments to prevent SQL injection
- */
-export function sanitizeForComment(value: string): string {
-  return value
-    .replace(/\*\//g, '')
-    .replace(/\/\*/g, '')
-    .replace(/[\r\n]/g, ' ');
-}
 
 /**
  * Formats a source location into a SQL comment
@@ -17,7 +7,7 @@ export function sanitizeForComment(value: string): string {
  */
 export function formatComment(
   location: SourceLocation,
-  config: QueryIdConfig = {}
+  config: SourceCommentConfig = {}
 ): string {
   const {
     includeFunctionName = false,
@@ -25,10 +15,10 @@ export function formatComment(
     pathTransformer = defaultPathTransformer,
   } = config;
 
-  const path = sanitizeForComment(pathTransformer(location.filePath));
+  const path = pathTransformer(location.filePath);
   const line = location.lineNumber;
   const column = location.columnNumber;
-  const fn = location.functionName ? sanitizeForComment(location.functionName) : undefined;
+  const fn = location.functionName;
 
   // Build comment: /* path:line[:column] [in function] */
   let comment = `/* ${path}:${line}`;

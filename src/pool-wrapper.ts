@@ -1,58 +1,72 @@
 import { Pool, PoolClient, PoolConfig, QueryConfig, QueryResult, QueryResultRow } from 'pg';
-import type { QueryIdConfig, TrackedPool, TrackedPoolClient } from './types.js';
+import type { SourceCommentConfig, TrackedPool, TrackedPoolClient } from './types.js';
 import { captureSourceLocation } from './stack-trace.js';
 import { formatComment, prependComment } from './comment-formatter.js';
 
-type LogFn = (message: string, ...args: unknown[]) => void;
+/**
+ * Modifies a query by prepending a source location comment
+ */
+function modifyQuery(
+  query: string | QueryConfig,
+  config: SourceCommentConfig
+): string | QueryConfig {
+  if (config.enabled === false) {
+    return query;
+  }
+
+  const location = captureSourceLocation(config);
+  if (!location) {
+    return query;
+  }
+
+  const comment = formatComment(location, config);
+
+  if (typeof query === 'string') {
+    return prependComment(query, comment);
+  }
+
+  return {
+    ...query,
+    text: prependComment(query.text, comment),
+  };
+}
 
 /**
- * Creates a query modifier function with the given config and logger
+ * Creates a wrapped query function that prepends source comments
  */
-function createModifyQuery(config: QueryIdConfig, log: LogFn) {
-  return {
-    modifyString(query: string): string {
-      if (config.enabled === false) {
-        return query;
-      }
+function createTrackedQueryFn<T extends { query: Pool['query'] | PoolClient['query'] }>(
+  target: T,
+  config: SourceCommentConfig
+) {
+  return function trackedQuery<R extends QueryResultRow = QueryResultRow>(
+    queryTextOrConfig: string | QueryConfig,
+    valuesOrCallback?: unknown[] | ((err: Error, result: QueryResult<R>) => void),
+    callback?: (err: Error, result: QueryResult<R>) => void
+  ): Promise<QueryResult<R>> | void {
+    // Callback as second arg: query(text, callback)
+    if (typeof valuesOrCallback === 'function') {
+      const modified = modifyQuery(queryTextOrConfig as string, config) as string;
+      return target.query(
+        modified,
+        valuesOrCallback as (err: Error, result: QueryResult<R>) => void
+      );
+    }
 
-      const location = captureSourceLocation(config, log);
+    // Callback as third arg: query(text, values, callback)
+    if (callback !== undefined) {
+      const modified = modifyQuery(queryTextOrConfig as string, config) as string;
+      return target.query(modified, valuesOrCallback as unknown[], callback);
+    }
 
-      if (!location) {
-        return query;
-      }
+    // Values array: query(text, values) or query(config, values)
+    if (valuesOrCallback !== undefined) {
+      const modified = modifyQuery(queryTextOrConfig, config);
+      return target.query(modified, valuesOrCallback as unknown[]);
+    }
 
-      const comment = formatComment(location, config);
-      log('Adding comment:', comment);
-
-      return prependComment(query, comment);
-    },
-
-    modifyQueryConfig(query: QueryConfig): QueryConfig {
-      if (config.enabled === false) {
-        return query;
-      }
-
-      const location = captureSourceLocation(config, log);
-
-      if (!location) {
-        return query;
-      }
-
-      const comment = formatComment(location, config);
-      log('Adding comment:', comment);
-
-      return {
-        ...query,
-        text: prependComment(query.text, comment),
-      };
-    },
-
-    modify(query: string | QueryConfig): string | QueryConfig {
-      if (typeof query === 'string') {
-        return this.modifyString(query);
-      }
-      return this.modifyQueryConfig(query);
-    },
+    // Simple: query(text) or query(config)
+    const modified = modifyQuery(queryTextOrConfig, config);
+    return target.query(modified);
   };
 }
 
@@ -61,11 +75,8 @@ function createModifyQuery(config: QueryIdConfig, log: LogFn) {
  */
 function createTrackedClient(
   client: PoolClient,
-  config: QueryIdConfig,
-  log: LogFn
+  config: SourceCommentConfig
 ): TrackedPoolClient {
-  const modifyQuery = createModifyQuery(config, log);
-
   return new Proxy(client, {
     get(target, prop, receiver) {
       if (prop === '__isTrackedClient') {
@@ -73,39 +84,7 @@ function createTrackedClient(
       }
 
       if (prop === 'query') {
-        return function trackedClientQuery<R extends QueryResultRow = QueryResultRow>(
-          queryTextOrConfig: string | QueryConfig,
-          valuesOrCallback?: unknown[] | ((err: Error, result: QueryResult<R>) => void),
-          callback?: (err: Error, result: QueryResult<R>) => void
-        ): Promise<QueryResult<R>> | void {
-          // Handle callback-style queries
-          if (typeof valuesOrCallback === 'function') {
-            const modifiedQuery = modifyQuery.modifyString(queryTextOrConfig as string);
-            return target.query(
-              modifiedQuery,
-              valuesOrCallback as (err: Error, result: QueryResult<R>) => void
-            );
-          }
-
-          if (callback !== undefined) {
-            const modifiedQuery = modifyQuery.modifyString(queryTextOrConfig as string);
-            return target.query(
-              modifiedQuery,
-              valuesOrCallback as unknown[],
-              callback
-            );
-          }
-
-          if (valuesOrCallback !== undefined) {
-            const modifiedQuery = typeof queryTextOrConfig === 'string'
-              ? modifyQuery.modifyString(queryTextOrConfig)
-              : modifyQuery.modifyQueryConfig(queryTextOrConfig);
-            return target.query(modifiedQuery, valuesOrCallback as unknown[]);
-          }
-
-          const modifiedQuery = modifyQuery.modify(queryTextOrConfig);
-          return target.query(modifiedQuery);
-        };
+        return createTrackedQueryFn(target, config);
       }
 
       const value = Reflect.get(target, prop, receiver);
@@ -136,83 +115,38 @@ function isPoolLike(obj: unknown): obj is Pool {
  */
 export function createTrackedPool(
   poolOrConfig: Pool | PoolConfig | string,
-  queryIdConfig: QueryIdConfig = {}
+  config: SourceCommentConfig = {}
 ): TrackedPool {
   // Create the underlying pool if config was passed, or use existing pool-like object
   const pool = isPoolLike(poolOrConfig)
     ? poolOrConfig
     : new Pool(typeof poolOrConfig === 'string' ? { connectionString: poolOrConfig } : poolOrConfig);
 
-  const config: QueryIdConfig = {
+  const mergedConfig: SourceCommentConfig = {
     enabled: true,
-    ...queryIdConfig,
+    ...config,
   };
 
-  const log: LogFn = config.debug && config.logger
-    ? config.logger.debug.bind(config.logger)
-    : config.debug
-      ? console.debug.bind(console, '[prisma-query-ids]')
-      : () => {};
-
-  const modifyQuery = createModifyQuery(config, log);
-
   // Create a proxy to intercept query methods
-  const trackedPool = new Proxy(pool, {
+  return new Proxy(pool, {
     get(target, prop, receiver) {
-      // Mark as tracked pool
       if (prop === '__isTrackedPool') {
         return true;
       }
 
-      // Intercept query method
       if (prop === 'query') {
-        return function trackedQuery<R extends QueryResultRow = QueryResultRow>(
-          queryTextOrConfig: string | QueryConfig,
-          valuesOrCallback?: unknown[] | ((err: Error, result: QueryResult<R>) => void),
-          callback?: (err: Error, result: QueryResult<R>) => void
-        ): Promise<QueryResult<R>> | void {
-          // Handle callback-style queries
-          if (typeof valuesOrCallback === 'function') {
-            const modifiedQuery = modifyQuery.modifyString(queryTextOrConfig as string);
-            return target.query(
-              modifiedQuery,
-              valuesOrCallback as (err: Error, result: QueryResult<R>) => void
-            );
-          }
-
-          if (callback !== undefined) {
-            const modifiedQuery = modifyQuery.modifyString(queryTextOrConfig as string);
-            return target.query(
-              modifiedQuery,
-              valuesOrCallback as unknown[],
-              callback
-            );
-          }
-
-          if (valuesOrCallback !== undefined) {
-            const modifiedQuery = typeof queryTextOrConfig === 'string'
-              ? modifyQuery.modifyString(queryTextOrConfig)
-              : modifyQuery.modifyQueryConfig(queryTextOrConfig);
-            return target.query(modifiedQuery, valuesOrCallback as unknown[]);
-          }
-
-          const modifiedQuery = modifyQuery.modify(queryTextOrConfig);
-          return target.query(modifiedQuery);
-        };
+        return createTrackedQueryFn(target, mergedConfig);
       }
 
-      // Intercept connect to wrap the client
       if (prop === 'connect') {
         return async function trackedConnect(): Promise<TrackedPoolClient> {
           const client = await target.connect();
-          return createTrackedClient(client, config, log);
+          return createTrackedClient(client, mergedConfig);
         };
       }
 
-      // For all other properties, return the original
       const value = Reflect.get(target, prop, receiver);
 
-      // Bind functions to the target
       if (typeof value === 'function') {
         return value.bind(target);
       }
@@ -220,6 +154,4 @@ export function createTrackedPool(
       return value;
     },
   }) as TrackedPool;
-
-  return trackedPool;
 }

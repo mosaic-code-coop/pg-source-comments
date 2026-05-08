@@ -1,11 +1,11 @@
 // Main library exports
 export { createTrackedPool } from './pool-wrapper.js';
 export { captureSourceLocation, defaultPathTransformer } from './stack-trace.js';
-export { formatComment, prependComment, sanitizeForComment } from './comment-formatter.js';
+export { formatComment, prependComment } from './comment-formatter.js';
 
 // Type exports
 export type {
-  QueryIdConfig,
+  SourceCommentConfig,
   SourceLocation,
   CallSiteInfo,
   TrackedPool,

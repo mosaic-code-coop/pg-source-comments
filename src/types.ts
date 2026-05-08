@@ -14,7 +14,7 @@ export interface SourceLocation {
   functionName?: string;
 }
 
-export interface QueryIdConfig {
+export interface SourceCommentConfig {
   /**
    * Whether to include the function name in the comment
    * @default false
@@ -50,19 +50,6 @@ export interface QueryIdConfig {
    * @default 20
    */
   frameCount?: number;
-
-  /**
-   * Logger for debugging
-   */
-  logger?: {
-    debug: (message: string, ...args: unknown[]) => void;
-  };
-
-  /**
-   * Enable debug logging
-   * @default false
-   */
-  debug?: boolean;
 }
 
 export interface TrackedPool extends Pool {

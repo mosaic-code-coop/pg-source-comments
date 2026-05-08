@@ -1,14 +1,13 @@
+import path from 'node:path';
 import { getCallSites } from 'node:util';
-import type { CallSiteInfo, SourceLocation, QueryIdConfig } from './types.js';
-
-type LogFn = (message: string, ...args: unknown[]) => void;
+import type { CallSiteInfo, SourceLocation, SourceCommentConfig } from './types.js';
 
 // Default patterns to exclude from stack traces
 const DEFAULT_EXCLUDE_PATTERNS: RegExp[] = [
   /node_modules/,
   /@prisma/,
   /prisma-client/,
-  /prisma-query-ids/,
+  /pg-source-comments[\\/](?:src|dist)[\\/]/,
   /^node:/,
   /^internal\//,
 ];
@@ -17,7 +16,7 @@ const DEFAULT_EXCLUDE_PATTERNS: RegExp[] = [
  * Captures the current call stack and returns the first user-code frame.
  * Uses util.getCallSites() with sourceMap support for accurate TS locations.
  */
-export function captureSourceLocation(config: QueryIdConfig = {}, logger?: LogFn): SourceLocation | null {
+export function captureSourceLocation(config: SourceCommentConfig = {}): SourceLocation | null {
   const {
     excludePatterns = [],
     frameCount = 20,
@@ -34,10 +33,6 @@ export function captureSourceLocation(config: QueryIdConfig = {}, logger?: LogFn
   try {
     callSites = getCallSites({ sourceMap: true }) as CallSiteInfo[];
   } catch (error) {
-    // Log error if logger is provided
-    if (logger) {
-      logger('Failed to capture call sites:', error);
-    }
     // Fallback if getCallSites is not available
     return null;
   }
@@ -69,24 +64,23 @@ export function captureSourceLocation(config: QueryIdConfig = {}, logger?: LogFn
 }
 
 /**
- * Default path transformer that creates a clean relative path
+ * Default path transformer that creates a clean relative path from cwd
  */
 export function defaultPathTransformer(fullPath: string): string {
-  // Try to find common project markers and make path relative
-  const markers = ['/src/', '/lib/', '/app/', '/pages/', '/api/'];
+  try {
+    const cwd = process.cwd();
+    const relative = path.relative(cwd, fullPath);
 
-  for (const marker of markers) {
-    const index = fullPath.lastIndexOf(marker);
-    if (index !== -1) {
-      return fullPath.slice(index + 1); // Remove leading slash
+    // If path is outside cwd (monorepo, node_modules), use filename + parent dir
+    if (relative.startsWith('..')) {
+      const parts = fullPath.split(path.sep);
+      return parts.length >= 2 ? parts.slice(-2).join(path.sep) : path.basename(fullPath);
     }
-  }
 
-  // Fallback: return just the filename with parent directory
-  const parts = fullPath.split('/');
-  if (parts.length >= 2) {
-    return parts.slice(-2).join('/');
+    return relative;
+  } catch {
+    // Fallback on error
+    const parts = fullPath.split(path.sep);
+    return parts.length >= 2 ? parts.slice(-2).join(path.sep) : fullPath;
   }
-
-  return fullPath;
 }

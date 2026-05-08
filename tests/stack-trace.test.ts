@@ -5,60 +5,91 @@ import {
 } from '../src/stack-trace.js';
 
 describe('defaultPathTransformer', () => {
-  it('extracts path after /src/', () => {
+  let cwdStub: any;
+
+  beforeEach(() => {
+    cwdStub = vi.spyOn(process, 'cwd');
+  });
+
+  afterEach(() => {
+    cwdStub.mockRestore();
+  });
+
+  it('creates path relative to cwd', () => {
+    cwdStub.mockReturnValue('/home/user/project');
     const result = defaultPathTransformer('/home/user/project/src/api/users.ts');
     expect(result).toBe('src/api/users.ts');
   });
 
-  it('extracts path after /lib/', () => {
+  it('returns relative path when file is under cwd', () => {
+    cwdStub.mockReturnValue('/home/user/project');
+    const result = defaultPathTransformer('/home/user/project/src/api/users.ts');
+    expect(result).toBe('src/api/users.ts');
+  });
+
+  it('returns relative path for lib directory', () => {
+    cwdStub.mockReturnValue('/home/user/project');
     const result = defaultPathTransformer('/home/user/project/lib/utils.ts');
     expect(result).toBe('lib/utils.ts');
   });
 
-  it('extracts path after /app/', () => {
+  it('returns relative path for app directory', () => {
+    cwdStub.mockReturnValue('/home/user/project');
     const result = defaultPathTransformer('/home/user/project/app/routes/index.ts');
     expect(result).toBe('app/routes/index.ts');
   });
 
-  it('extracts path after /pages/', () => {
+  it('returns relative path for pages directory', () => {
+    cwdStub.mockReturnValue('/home/user/project');
     const result = defaultPathTransformer('/home/user/project/pages/api/hello.ts');
     expect(result).toBe('pages/api/hello.ts');
   });
 
-  it('extracts path after /api/', () => {
+  it('returns relative path for api directory', () => {
+    cwdStub.mockReturnValue('/home/user/project');
     const result = defaultPathTransformer('/home/user/project/api/handlers.ts');
     expect(result).toBe('api/handlers.ts');
   });
 
-  it('uses last two path segments as fallback', () => {
-    const result = defaultPathTransformer('/home/user/project/custom/file.ts');
+  it('uses last two path segments for files outside cwd', () => {
+    cwdStub.mockReturnValue('/home/user/project');
+    const result = defaultPathTransformer('/home/user/other-project/custom/file.ts');
     expect(result).toBe('custom/file.ts');
   });
 
-  it('returns full path if only one segment', () => {
-    const result = defaultPathTransformer('file.ts');
-    expect(result).toBe('file.ts');
+  it('returns last two segments for file outside cwd', () => {
+    cwdStub.mockReturnValue('/home/user/project');
+    const result = defaultPathTransformer('/home/user/other-project/file.ts');
+    expect(result).toBe('other-project/file.ts');
   });
 
-  it('uses last occurrence of marker', () => {
-    const result = defaultPathTransformer('/home/src/project/src/nested/file.ts');
-    expect(result).toBe('src/nested/file.ts');
+  it('handles deeply nested paths correctly', () => {
+    cwdStub.mockReturnValue('/home/user/project');
+    const result = defaultPathTransformer('/home/user/project/src/nested/deep/path/to/file.ts');
+    expect(result).toBe('src/nested/deep/path/to/file.ts');
+  });
+
+  it('handles monorepo package structure (file outside cwd)', () => {
+    cwdStub.mockReturnValue('/home/user/monorepo');
+    const result = defaultPathTransformer('/home/user/monorepo/packages/backend/src/api/users.ts');
+    expect(result).toBe('packages/backend/src/api/users.ts');
+  });
+
+  it('handles files exactly at cwd root', () => {
+    cwdStub.mockReturnValue('/home/user/project');
+    const result = defaultPathTransformer('/home/user/project/index.ts');
+    expect(result).toBe('index.ts');
   });
 });
 
 describe('captureSourceLocation', () => {
-  // Note: These tests run through vitest which may filter all frames as node_modules
-  // The tests verify the function doesn't throw and returns expected types
-
   it('returns null or SourceLocation object', () => {
     const location = captureSourceLocation();
-    // Either null (all frames filtered) or a valid location object
     if (location !== null) {
       expect(location.filePath).toBeDefined();
       expect(typeof location.filePath).toBe('string');
       expect(location.lineNumber).toBeGreaterThan(0);
     } else {
-      // When running in vitest, all frames may be in node_modules
       expect(location).toBeNull();
     }
   });
@@ -79,11 +110,9 @@ describe('captureSourceLocation', () => {
   });
 
   it('filters frames matching exclude patterns', () => {
-    // If we get a location, verify it doesn't match default exclude patterns
     const location = captureSourceLocation();
     if (location) {
       expect(location.filePath).not.toMatch(/^node:/);
-      // The result should be a non-excluded path
       expect(typeof location.lineNumber).toBe('number');
     }
   });
@@ -93,7 +122,6 @@ describe('captureSourceLocation', () => {
     if (location) {
       expect(location).toHaveProperty('filePath');
       expect(location).toHaveProperty('lineNumber');
-      // columnNumber and functionName are optional
       if (location.columnNumber !== undefined) {
         expect(typeof location.columnNumber).toBe('number');
       }

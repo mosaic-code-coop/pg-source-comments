@@ -1,7 +1,7 @@
 {
-  "name": "prisma-query-ids",
+  "name": "pg-source-comments",
   "version": "1.0.0",
-  "description": "Prepend SQL queries with source file location comments for Prisma ORM",
+  "description": "Prepend SQL queries with source file location comments for PostgreSQL",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -19,9 +19,11 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "scripts": {
+    "clean": "rm -rf dist",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run",
@@ -29,22 +31,31 @@
     "test:integration": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run -c vitest.integration.config.ts",
     "test:integration:setup": "bash scripts/integration-test-setup.sh",
     "test:setup": "prisma db push --schema tests/prisma/schema.prisma",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
+    "release:patch": "npm run changelog && git add CHANGELOG.md && git commit -m \"chore: update changelog\" && npm version patch && git push --follow-tags && npm run build && npm publish",
+    "release:minor": "npm run changelog && git add CHANGELOG.md && git commit -m \"chore: update changelog\" && npm version minor && git push --follow-tags && npm run build && npm publish",
+    "release:major": "npm run changelog && git add CHANGELOG.md && git commit -m \"chore: update changelog\" && npm version major && git push --follow-tags && npm run build && npm publish",
+    "release:dry": "npm run changelog -- --dry-run"
   },
   "keywords": [
-    "prisma",
+    "pg",
+    "postgres",
     "postgresql",
     "sql",
     "debugging",
     "tracing",
-    "source-maps"
+    "source-maps",
+    "prisma",
+    "knex",
+    "sequelize"
   ],
   "engines": {
     "node": ">=22.9.0"
   },
   "peerDependencies": {
-    "@prisma/adapter-pg": ">=5.0.0",
-    "pg": ">=8.0.0"
+    "pg": ">=8.0.0",
+    "@prisma/adapter-pg": ">=5.0.0"
   },
   "peerDependenciesMeta": {
     "@prisma/adapter-pg": {
@@ -53,15 +64,24 @@
   },
   "devDependencies": {
     "@prisma/adapter-pg": "^6.2.0",
+    "@prisma/client": "^7.2.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
+    "conventional-changelog-cli": "^5.0.0",
     "pg": "^8.13.0",
     "prisma": "^7.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.0.0"
   },
-  "dependencies": {
-    "@prisma/client": "^7.2.0"
-  }
+  "license": "NoHarm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mosaic-sunrise/pg-source-comments.git"
+  },
+  "homepage": "https://github.com/mosaic-sunrise/pg-source-comments#readme",
+  "bugs": {
+    "url": "https://github.com/mosaic-sunrise/pg-source-comments/issues"
+  },
+  "author": "Chris Jensen <2920476+chrisjensen@users.noreply.github.com> (https://github.com/chrisjensen)"
 }
