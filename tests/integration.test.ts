@@ -92,10 +92,10 @@ describe('integration tests with PostgreSQL', () => {
       const client1 = await pool1.connect();
       const client2 = await pool2.connect();
 
-      try {
-        // Create test table
-        await client1.query('CREATE TEMP TABLE integration_test (id int)');
+      // TEMP tables are session-scoped, so use a regular table both sessions can see.
+      await client1.query('CREATE TABLE IF NOT EXISTS integration_test (id int)');
 
+      try {
         // Transaction 1 acquires lock
         await client1.query('BEGIN');
         await client1.query('INSERT INTO integration_test VALUES (1)');
@@ -131,6 +131,7 @@ describe('integration tests with PostgreSQL', () => {
           await client1.query('ROLLBACK').catch(() => {});
           await client2.query('ROLLBACK').catch(() => {});
         } catch {}
+        await client1.query('DROP TABLE IF EXISTS integration_test').catch(() => {});
         client1.release();
         client2.release();
         await pool1.end();
