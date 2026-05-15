@@ -17,14 +17,14 @@ Prepend SQL queries with source file location comments for PostgreSQL. Debug slo
 ## Installation
 
 ```bash
-npm install pg-source-comments pg
+npm install @mosaic-code/pg-source-comments pg
 ```
 
 ## Quick Start
 
 ```typescript
 // src/db.ts
-import { createTrackedPool } from 'pg-source-comments';
+import { createTrackedPool } from '@mosaic-code/pg-source-comments';
 
 // Create a tracked pool
 const pool = createTrackedPool({
@@ -61,7 +61,7 @@ npm install @prisma/adapter-pg
 // src/prisma.ts
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { createTrackedPool } from 'pg-source-comments';
+import { createTrackedPool } from '@mosaic-code/pg-source-comments';
 
 // Create a tracked pool
 const pool = createTrackedPool(process.env.DATABASE_URL!);
@@ -207,7 +207,7 @@ import type {
   SourceLocation,
   TrackedPool,
   TrackedPoolClient,
-} from 'pg-source-comments';
+} from '@mosaic-code/pg-source-comments';
 ```
 
 ## Development

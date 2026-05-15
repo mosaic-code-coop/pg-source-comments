@@ -1,6 +1,9 @@
 {
-  "name": "pg-source-comments",
-  "version": "1.0.0",
+  "name": "@mosaic-code/pg-source-comments",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Prepend SQL queries with source file location comments for PostgreSQL",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -77,11 +80,11 @@
   "license": "NoHarm",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mosaic-sunrise/pg-source-comments.git"
+    "url": "git+https://github.com/mosaic-code-coop/pg-source-comments.git"
   },
-  "homepage": "https://github.com/mosaic-sunrise/pg-source-comments#readme",
+  "homepage": "https://github.com/mosaic-code-coop/pg-source-comments#readme",
   "bugs": {
-    "url": "https://github.com/mosaic-sunrise/pg-source-comments/issues"
+    "url": "https://github.com/mosaic-code-coop/pg-source-comments/issues"
   },
   "author": "Chris Jensen <2920476+chrisjensen@users.noreply.github.com> (https://github.com/chrisjensen)"
 }
