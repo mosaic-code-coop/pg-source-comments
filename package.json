@@ -54,7 +54,8 @@
     "sequelize"
   ],
   "engines": {
-    "node": ">=22.9.0"
+    "node": ">=22.9.0",
+    "npm": ">=11.14.0"
   },
   "peerDependencies": {
     "pg": ">=8.0.0",
