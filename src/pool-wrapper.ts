@@ -1,10 +1,10 @@
 import { Pool, PoolClient, PoolConfig, QueryConfig, QueryResult, QueryResultRow } from 'pg';
 import type { SourceCommentConfig, TrackedPool, TrackedPoolClient } from './types.js';
 import { captureSourceLocation } from './stack-trace.js';
-import { formatComment, prependComment } from './comment-formatter.js';
+import { formatComment, insertComment } from './comment-formatter.js';
 
 /**
- * Modifies a query by prepending a source location comment
+ * Modifies a query by inserting a source location comment
  */
 function modifyQuery(
   query: string | QueryConfig,
@@ -22,17 +22,17 @@ function modifyQuery(
   const comment = formatComment(location, config);
 
   if (typeof query === 'string') {
-    return prependComment(query, comment);
+    return insertComment(query, comment);
   }
 
   return {
     ...query,
-    text: prependComment(query.text, comment),
+    text: insertComment(query.text, comment),
   };
 }
 
 /**
- * Creates a wrapped query function that prepends source comments
+ * Creates a wrapped query function that inserts source comments
  */
 function createTrackedQueryFn<T extends { query: Pool['query'] | PoolClient['query'] }>(
   target: T,
@@ -111,7 +111,7 @@ function isPoolLike(obj: unknown): obj is Pool {
 }
 
 /**
- * Creates a wrapped pg Pool that prepends source location comments to all queries
+ * Creates a wrapped pg Pool that inserts source location comments into all queries
  */
 export function createTrackedPool(
   poolOrConfig: Pool | PoolConfig | string,

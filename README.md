@@ -1,12 +1,12 @@
 # pg-source-comments
 
-Prepend SQL queries with source file location comments for PostgreSQL. Debug slow database queries by identifying exactly where they originated in your TypeScript code.
+Tag SQL queries with source file location comments for PostgreSQL. Debug slow database queries by identifying exactly where they originated in your TypeScript code.
 
 ## Features
 
 - **Works with any pg-based code** - Wraps `pg` itself, should work with any library that relies on it
 - **TypeScript source locations** - Uses source maps to show original `.ts` file paths, not compiled `.js`
-- **Prepends comments** - Comments appear at the start of queries, avoiding truncation in database logs
+- **Comments near the start of queries** - Inserted after the first keyword, so they survive log truncation and PostgreSQL 18+ `pg_stat_statements`
 
 ## Requirements
 
@@ -45,8 +45,8 @@ node --enable-source-maps dist/index.js
 Queries in your database logs will now include source locations:
 
 ```sql
-/* src/api/users.ts:45 */ SELECT * FROM users WHERE id = 1
-/* src/services/auth.ts:123 */ UPDATE sessions SET last_active = NOW() WHERE user_id = 2
+SELECT /* src/api/users.ts:45 */ * FROM users WHERE id = 1
+UPDATE /* src/services/auth.ts:123 */ sessions SET last_active = NOW() WHERE user_id = 2
 ```
 
 ## Using with Prisma
@@ -84,12 +84,12 @@ The library wraps the `pg` Pool at the driver level. When any code executes a qu
 1. Capture the call stack using `util.getCallSites()`
 2. Find the first frame that's user code (not in `node_modules` or library internals)
 3. Map the location back to TypeScript source using source maps
-4. Prepend a SQL comment with the file path and line number
+4. Insert a SQL comment with the file path and line number after the first keyword
 
 ```
 User Code → ORM/Query Builder → pg → PostgreSQL
                                       ↑
-                            TrackedPool intercepts & prepends comment
+                            TrackedPool intercepts & inserts comment
 ```
 
 ## Configuration Options
@@ -155,10 +155,10 @@ try {
 
 Database sees:
 ```sql
-/* src/routes/user.ts:67 */ BEGIN
-/* src/routes/user.ts:69 */ SELECT * FROM users WHERE id = 1
-/* src/routes/user.ts:70 */ INSERT INTO posts (title, author_id) VALUES ($1, $2)
-/* src/routes/user.ts:67 */ COMMIT
+BEGIN /* src/routes/user.ts:67 */
+SELECT /* src/routes/user.ts:69 */ * FROM users WHERE id = 1
+INSERT /* src/routes/user.ts:70 */ INTO posts (title, author_id) VALUES ($1, $2)
+COMMIT /* src/routes/user.ts:67 */
 ```
 
 ## TypeScript Setup
@@ -190,7 +190,7 @@ ts-node --esm src/index.ts
 
 ### `createTrackedPool(poolOrConfig, config)`
 
-Creates a wrapped `pg` Pool that prepends source location comments to all queries.
+Creates a wrapped `pg` Pool that inserts source location comments into all queries.
 
 **Parameters:**
 
@@ -226,9 +226,12 @@ npm run typecheck
 npm run build
 ```
 
-## Why Prepend Instead of Append?
+## Why After the First Keyword?
 
-Database query logs often truncate long queries. Appending comments at the end means they get cut off. Prepending ensures the source location is always visible, even when the query itself is truncated.
+- **Not at the end:** database query logs often truncate long queries, so a comment appended at the end gets cut off.
+- **Not at the very start:** PostgreSQL 18+ drops leading comments from the query text stored in `pg_stat_statements`, so a prepended comment is lost there.
+
+Inserting the comment directly after the first keyword (`SELECT /* src/api.ts:42 */ ...`) keeps it visible in truncated logs and in `pg_stat_statements`. Leading whitespace, existing comments and opening parentheses are skipped first, so `(SELECT ...) UNION ...` becomes `(SELECT /* src/api.ts:42 */ ...) UNION ...`.
 
 ## License
 

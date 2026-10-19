@@ -140,6 +140,37 @@ describe('integration tests with PostgreSQL', () => {
     });
   });
 
+  describe('comment presence in pg_stat_statements', () => {
+    // PostgreSQL 18 drops leading comments from pg_stat_statements query text,
+    // so comments must survive being placed after the first keyword.
+    it('keeps comments in pg_stat_statements query text', async () => {
+      const pool = createTrackedPool(TEST_DATABASE_URL, { enabled: true });
+
+      try {
+        await pool.query('CREATE EXTENSION IF NOT EXISTS pg_stat_statements');
+        await pool.query('CREATE TABLE IF NOT EXISTS stat_statements_test (id int)');
+        await pool.query('SELECT pg_stat_statements_reset()');
+
+        await pool.query('SELECT id FROM stat_statements_test WHERE id = $1', [1]);
+        await pool.query('(SELECT id FROM stat_statements_test) UNION (SELECT 2)');
+
+        const result = await pool.query(`
+          SELECT query FROM pg_stat_statements
+          WHERE query LIKE '%stat_statements_test%' AND query NOT LIKE '%pg_stat_statements%'
+          ORDER BY query
+        `);
+
+        expect(result.rows.map((row) => row.query)).toEqual([
+          expect.stringMatching(/^\(SELECT \/\* .*:\d+ \*\/ id FROM stat_statements_test\) UNION/),
+          expect.stringMatching(/^SELECT \/\* .*:\d+ \*\/ id FROM stat_statements_test WHERE id = \$1$/),
+        ]);
+      } finally {
+        await pool.query('DROP TABLE IF EXISTS stat_statements_test');
+        await pool.end();
+      }
+    });
+  });
+
   describe('Prisma Client integration', () => {
     it('works with Prisma Client queries', async () => {
       const pool = createTrackedPool(TEST_DATABASE_URL, { enabled: true });

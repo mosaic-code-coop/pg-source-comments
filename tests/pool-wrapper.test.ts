@@ -67,22 +67,22 @@ describe('createTrackedPool', () => {
   });
 
   describe('pool.query()', () => {
-    it('prepends comment to string queries', async () => {
+    it('inserts comment into string queries', async () => {
       const tracked = createTrackedPool(mocks.pool, { enabled: true });
       await tracked.query('SELECT * FROM users');
 
       expect(mocks.spies.poolQuery).toHaveBeenCalledTimes(1);
       const calledWith = mocks.spies.poolQuery.mock.calls[0][0];
-      expect(calledWith).toMatch(/^\/\* src\/api\/users\.ts:42 \*\/ SELECT \* FROM users$/);
+      expect(calledWith).toBe('SELECT /* src/api/users.ts:42 */ * FROM users');
     });
 
-    it('prepends comment to QueryConfig objects', async () => {
+    it('inserts comment into QueryConfig objects', async () => {
       const tracked = createTrackedPool(mocks.pool, { enabled: true });
       await tracked.query({ text: 'SELECT * FROM users WHERE id = $1', values: [1] });
 
       expect(mocks.spies.poolQuery).toHaveBeenCalledTimes(1);
       const calledWith = mocks.spies.poolQuery.mock.calls[0][0] as QueryConfig;
-      expect(calledWith.text).toMatch(/^\/\* src\/api\/users\.ts:42 \*\/ SELECT \* FROM users WHERE id = \$1$/);
+      expect(calledWith.text).toBe('SELECT /* src/api/users.ts:42 */ * FROM users WHERE id = $1');
       expect(calledWith.values).toEqual([1]);
     });
 
@@ -92,7 +92,7 @@ describe('createTrackedPool', () => {
 
       expect(mocks.spies.poolQuery).toHaveBeenCalledTimes(1);
       const calls = mocks.spies.poolQuery.mock.calls[0];
-      expect(calls[0]).toMatch(/^\/\* src\/api\/users\.ts:42 \*\/ SELECT/);
+      expect(calls[0]).toMatch(/^SELECT \/\* src\/api\/users\.ts:42 \*\/ /);
       expect(calls[1]).toEqual([1]);
     });
 
@@ -117,7 +117,7 @@ describe('createTrackedPool', () => {
       expect((client as unknown as { __isTrackedClient: boolean }).__isTrackedClient).toBe(true);
     });
 
-    it('prepends comment to client queries', async () => {
+    it('inserts comment into client queries', async () => {
       const tracked = createTrackedPool(mocks.pool, { enabled: true });
       const client = await tracked.connect();
 
@@ -125,7 +125,7 @@ describe('createTrackedPool', () => {
 
       expect(mocks.spies.clientQuery).toHaveBeenCalledTimes(1);
       const calledWith = mocks.spies.clientQuery.mock.calls[0][0];
-      expect(calledWith).toMatch(/^\/\* src\/api\/users\.ts:42 \*\/ BEGIN$/);
+      expect(calledWith).toBe('BEGIN /* src/api/users.ts:42 */');
     });
 
     it('client passes through when disabled', async () => {
@@ -144,7 +144,7 @@ describe('createTrackedPool', () => {
       await client.query({ text: 'INSERT INTO users VALUES ($1)', values: ['test'] });
 
       const calledWith = mocks.spies.clientQuery.mock.calls[0][0] as QueryConfig;
-      expect(calledWith.text).toMatch(/^\/\* src\/api\/users\.ts:42 \*\/ INSERT INTO users VALUES/);
+      expect(calledWith.text).toMatch(/^INSERT \/\* src\/api\/users\.ts:42 \*\/ INTO users VALUES/);
       expect(calledWith.values).toEqual(['test']);
     });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   formatComment,
-  prependComment,
+  insertComment,
 } from '../src/comment-formatter.js';
 import type { SourceLocation } from '../src/types.js';
 
@@ -63,25 +63,24 @@ describe('formatComment', () => {
   });
 });
 
-describe('prependComment', () => {
-  it('prepends comment to SQL query', () => {
-    const sql = 'SELECT * FROM users';
-    const comment = '/* src/api.ts:42 */';
-    const result = prependComment(sql, comment);
-    expect(result).toBe('/* src/api.ts:42 */ SELECT * FROM users');
+describe('insertComment', () => {
+  const comment = '/* src/api.ts:42 */';
+
+  it('inserts comment after the first keyword', () => {
+    const result = insertComment('SELECT * FROM users', comment);
+    expect(result).toBe('SELECT /* src/api.ts:42 */ * FROM users');
   });
 
-  it('handles queries with leading whitespace', () => {
-    const sql = '  SELECT * FROM users';
-    const comment = '/* src/api.ts:42 */';
-    const result = prependComment(sql, comment);
-    expect(result).toBe('/* src/api.ts:42 */   SELECT * FROM users');
+  it('skips leading whitespace, comments and parentheses', () => {
+    const sql = '  -- note\n/* existing */ (SELECT a FROM t) UNION (SELECT b FROM u)';
+    const result = insertComment(sql, comment);
+    expect(result).toBe(
+      '  -- note\n/* existing */ (SELECT /* src/api.ts:42 */ a FROM t) UNION (SELECT b FROM u)'
+    );
   });
 
-  it('handles empty queries', () => {
-    const sql = '';
-    const comment = '/* src/api.ts:42 */';
-    const result = prependComment(sql, comment);
+  it('prepends when the query has no keyword', () => {
+    const result = insertComment('', comment);
     expect(result).toBe('/* src/api.ts:42 */ ');
   });
 });
