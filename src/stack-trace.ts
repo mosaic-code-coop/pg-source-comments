@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getCallSites } from 'node:util';
 import type { CallSiteInfo, SourceLocation, SourceCommentConfig } from './types.js';
 
@@ -64,9 +65,12 @@ export function captureSourceLocation(config: SourceCommentConfig = {}): SourceL
 }
 
 /**
- * Default path transformer that creates a clean relative path from cwd
+ * Default path transformer that creates a clean relative path from cwd.
+ * Accepts file paths and `file:` URLs (as reported for ES modules).
  */
-export function defaultPathTransformer(fullPath: string): string {
+export function defaultPathTransformer(scriptName: string): string {
+  const fullPath = scriptName.startsWith('file:') ? fileURLToPath(scriptName) : scriptName;
+
   try {
     const cwd = process.cwd();
     const relative = path.relative(cwd, fullPath);

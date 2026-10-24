@@ -21,6 +21,12 @@ describe('defaultPathTransformer', () => {
     expect(result).toBe('src/api/users.ts');
   });
 
+  it('creates path relative to cwd from an ES module file URL', () => {
+    cwdStub.mockReturnValue('/home/user/project');
+    const result = defaultPathTransformer('file:///home/user/project/src/api/users.ts');
+    expect(result).toBe('src/api/users.ts');
+  });
+
   it('returns relative path when file is under cwd', () => {
     cwdStub.mockReturnValue('/home/user/project');
     const result = defaultPathTransformer('/home/user/project/src/api/users.ts');
