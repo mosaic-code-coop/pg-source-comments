@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { Pool } from 'pg';
+import { getCallSites } from 'node:util';
 import { createTrackedPool } from '../src/pool-wrapper.js';
+import { trackPrismaClient } from '../src/prisma-client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
@@ -172,19 +174,20 @@ describe('integration tests with PostgreSQL', () => {
   });
 
   describe('Prisma Client integration', () => {
+    beforeAll(async () => {
+      const { execSync } = await import('child_process');
+      execSync('npx prisma db push --schema tests/prisma/schema.prisma', {
+        env: { ...process.env, TEST_DATABASE_URL },
+        stdio: 'inherit',
+      });
+    });
+
     it('works with Prisma Client queries', async () => {
       const pool = createTrackedPool(TEST_DATABASE_URL, { enabled: true });
       const adapter = new PrismaPg(pool);
       const prisma = new PrismaClient({ adapter });
 
       try {
-        // Push schema to database
-        const { execSync } = await import('child_process');
-        execSync('npx prisma db push --schema tests/prisma/schema.prisma', {
-          env: { ...process.env, TEST_DATABASE_URL },
-          stdio: 'inherit',
-        });
-
         // Create test data via Prisma
         const user = await prisma.user.create({
           data: { name: 'Test User' }
@@ -221,5 +224,51 @@ describe('integration tests with PostgreSQL', () => {
         await pool.end();
       }
     });
+
+    it('comments Prisma queries with their call site when the client is tracked', async () => {
+      const pool = createTrackedPool(TEST_DATABASE_URL, { enabled: true });
+      const untracked = new PrismaClient({ adapter: new PrismaPg(pool) });
+      const prisma = trackPrismaClient(untracked);
+
+      try {
+        await pool.query('SELECT pg_stat_statements_reset()');
+
+        await prisma.user.findMany({ where: { name: 'tracked' } });
+        const findManyLine = currentLine() - 1;
+        await prisma.$queryRaw`SELECT id FROM "User" WHERE name = ${'raw'}`;
+        await prisma.$transaction(async (tx) => tx.user.count({ where: { name: 'interactive' } }));
+        await prisma.$transaction([prisma.user.findFirst({ where: { id: -1 } })]);
+        await prisma.$extends({}).user.findFirst({ where: { name: 'extended' } });
+        await untracked.user.findMany({ where: { id: { gt: 0 } } });
+
+        const result = await pool.query<{ query: string }>(`
+          SELECT query FROM pg_stat_statements
+          WHERE query LIKE '%"User"%' AND query NOT LIKE '%pg_stat_statements%'
+        `);
+        const statementMatching = (sqlPart: string) => {
+          const statement = result.rows.map((row) => row.query).find((query) => query.includes(sqlPart));
+          expect(statement, `no captured statement contains ${sqlPart}`).toBeDefined();
+          return statement!;
+        };
+        const callSiteComment = /^\w+ \/\* tests\/integration\.test\.ts:\d+ \*\/ /;
+
+        expect(statementMatching('"public"."User"."name" = $1 OFFSET')).toMatch(
+          new RegExp(`^SELECT /\\* tests/integration\\.test\\.ts:${findManyLine} \\*/ `)
+        );
+        expect(statementMatching('id FROM "User" WHERE name')).toMatch(callSiteComment);
+        expect(statementMatching('COUNT(*)')).toMatch(callSiteComment);
+        expect(statementMatching('"public"."User"."id" = $1')).toMatch(callSiteComment);
+        expect(statementMatching('"public"."User"."name" = $1 LIMIT')).toMatch(callSiteComment);
+        // Without trackPrismaClient, Prisma queries have no user code on the stack
+        expect(statementMatching('"public"."User"."id" > $1')).not.toContain('/*');
+      } finally {
+        await untracked.$disconnect();
+        await pool.end();
+      }
+    });
   });
 });
+
+function currentLine(): number {
+  return getCallSites()[1].lineNumber;
+}

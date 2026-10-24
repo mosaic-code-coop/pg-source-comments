@@ -61,17 +61,24 @@ npm install @prisma/adapter-pg
 // src/prisma.ts
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { createTrackedPool } from '@mosaic-code/pg-source-comments';
+import { createTrackedPool, trackPrismaClient } from '@mosaic-code/pg-source-comments';
 
 // Create a tracked pool
 const pool = createTrackedPool(process.env.DATABASE_URL!);
 
-// Create Prisma with the tracked pool
+// Create Prisma with the tracked pool, and track the client itself
 const adapter = new PrismaPg(pool);
-export const prisma = new PrismaClient({ adapter });
+export const prisma = trackPrismaClient(new PrismaClient({ adapter }));
 ```
 
-Works with both ORM queries (`findMany`, `create`, etc.) and raw queries (`$queryRaw`, `$executeRaw`).
+Both steps are needed. Prisma sends queries to the pool after an async hop, so the code that called `findMany` is no longer on the call stack when the pool sees the query. `trackPrismaClient` records the caller when a Prisma method is called and hands it to the pool.
+
+Covers model queries (`findMany`, `create`, etc.), raw queries (`$queryRaw`, `$executeRaw`, ...), interactive transactions (each query inside gets its own call site), batch `$transaction([...])`, and clients returned by `$extends()`.
+
+Limitations:
+
+- When Prisma combines several concurrent `findUnique` calls into one SQL statement, the statement carries the first caller's location.
+- Pass the client returned by `trackPrismaClient` around; queries made through the original, untracked client get no comment.
 
 ## Using with other libraries
 
@@ -198,6 +205,17 @@ Creates a wrapped `pg` Pool that inserts source location comments into all queri
 - `config` - Configuration options (optional)
 
 **Returns:** A `TrackedPool` that behaves like a standard `pg` Pool
+
+### `trackPrismaClient(client, config)`
+
+Wraps a Prisma client so its queries carry the calling code's location. Use with a Prisma client whose adapter uses a `createTrackedPool` pool.
+
+**Parameters:**
+
+- `client` - A `PrismaClient` (or extended client)
+- `config` - Configuration options (optional); stack options such as `excludePatterns` and `enabled` apply
+
+**Returns:** The client, with the same type
 
 ### Type Exports
 

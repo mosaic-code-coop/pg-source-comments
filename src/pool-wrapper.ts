@@ -1,6 +1,7 @@
 import { Pool, PoolClient, PoolConfig, QueryConfig, QueryResult, QueryResultRow } from 'pg';
 import type { SourceCommentConfig, TrackedPool, TrackedPoolClient } from './types.js';
 import { captureSourceLocation } from './stack-trace.js';
+import { locationStore } from './location-store.js';
 import { formatComment, insertComment } from './comment-formatter.js';
 
 /**
@@ -14,7 +15,9 @@ function modifyQuery(
     return query;
   }
 
-  const location = captureSourceLocation(config);
+  // The query's own stack wins; ORM queries (no user code on the stack) fall back
+  // to the location captured by trackPrismaClient()
+  const location = captureSourceLocation(config) ?? locationStore.getStore();
   if (!location) {
     return query;
   }
